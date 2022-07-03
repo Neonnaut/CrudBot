@@ -53,7 +53,7 @@ class Crud(commands.Cog, name="Crud"):
     async def create(self, ctx: commands.Context, worksheet: str, key: str, *args):
         """Create."""
 
-        # Try and get the worksheet to write to as commandSheet
+        # Get the worksheet to write to as commandSheet and check if none
         commandSheet = await get_commandsheet(ctx, self.workbook, worksheet)
         if commandSheet == None:
             return
@@ -63,44 +63,41 @@ class Crud(commands.Cog, name="Crud"):
         # Check if the key requested already exists in keys
         keys = commandSheet.col_values(1)  # get the list of keys
         if key in keys:
-            await ctx.send("It already exists.")
+            await ctx.send(f"{commandSheet.cell(1,1).value}: **{key}** already exists.")
             return
 
+        # Check if the columns requested are more than the columns in the header
         input = (key,) + args
         header = commandSheet.row_values(1)
-
-        # Check if the columns requested are more than the header
         if len(input) <= len(header):
             pass
         else:
-            await ctx.send("There are too many cols.")
+            await ctx.send("The columns in your new row exceed the columns in the header row.")
             return
 
         # Append a new row
         try:
             commandSheet.append_row(input)
         except:
-            await ctx.send(f"Some error occured when appending the row.")
+            await ctx.send("Some error occured when appending the row.")
             return
 
         # Sort table alphabetically by key
         try:
             commandSheet.sort((1, 'asc'))
         except:
-            await ctx.send(f"Some error occured when sorting.")
+            await ctx.send(f"Some error occured when sorting the sheet alphabetically.")
 
         # Make a nice completion message
         dict = ""
         for i in range(0, len(input)):
-            dict += ", " + header[i] + ":" + "\"" + input[i] + "\""
-        await ctx.send(f"Row values{dict} have been added.")
+            dict += " " + header[i] + ":" + "**" + input[i] + "**"
+        await ctx.send(f"{ctx.message.author.name} created a new row;{dict}; in worksheet:**{commandSheet.title}**.")
 
     @commands.command(name='read')
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def read(self, ctx: commands.Context, worksheet: str, key: str):
         """Read."""
-
-        print(self.workbook.title)
 
         # Try and get the worksheet to write to as commandSheet
         commandSheet = await get_commandsheet(ctx, self.workbook, worksheet)
@@ -109,14 +106,13 @@ class Crud(commands.Cog, name="Crud"):
         else:
             pass
 
-        # Check if the key requested already exists in keys
+        # Check if the key requested doesn't exist in keys
         keys = commandSheet.col_values(1)
         output = []
         if key in keys:
-            # We need to say +1 because googlesheets idexes start at 1, not 0
             output = commandSheet.row_values(keys.index(key)+1)
         else:
-            await ctx.send(f"Thingy wasn't foundy")
+            await ctx.send(f"{commandSheet.cell(1,1).value}: **{key}** doesn't exist.")
             return
 
         #input = (key,) + args
@@ -125,8 +121,8 @@ class Crud(commands.Cog, name="Crud"):
         # Make a nice completion message
         dict = ""
         for i in range(0, len(output)):
-            dict += ", " + header[i] + ":" + "\"" + output[i] + "\""
-        await ctx.send(f"Something: {dict}")
+            dict += " " + header[i] + ":" + "**" + output[i] + "**"
+        await ctx.send(f"Found information on the requested data: {dict} in worksheet:**{commandSheet.title}**")
 
     @commands.command(name='update')
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -147,11 +143,24 @@ class Crud(commands.Cog, name="Crud"):
             # We need to say +1 because googlesheets idexes start at 1, not 0
             output = keys.index(key)+1
         else:
-            await ctx.send(f"Thingy wasn't foundy")
+            await ctx.send(f"{commandSheet.cell(1,1).value}: **{key}** doesn't exist.")
+            return
+
+        # Check if the columns requested are more than the columns in the header
+        input = (key,) + args
+        header = commandSheet.row_values(1)
+        if len(input) <= len(header):
+            pass
+        else:
+            await ctx.send("The columns in your new row exceed the columns in the header row.")
             return
 
         # Update the cells of row at key
-        #commandSheet.update_cell(1, 1, 'Perro')
+        try:
+            for i in range(0, len(args)):
+                commandSheet.update_cell(output, i+2, args[i])
+        except:
+            await ctx.send(f"Some error occured when updating the row.")
 
         input = (key,) + args
         header = commandSheet.row_values(1)
@@ -159,8 +168,8 @@ class Crud(commands.Cog, name="Crud"):
         # Make a nice completion message
         dict = ""
         for i in range(1, len(input)):
-            dict += " " + header[i] + ": " + "**" + input[i] + "**"
-        await ctx.send(f'**{ctx.message.author.name}** updated the column\'s of {header[0]}: **{key}** *to*{dict}.')
+            dict += " " + header[i] + ":" + "**" + input[i] + "**"
+        await ctx.send(f'{ctx.message.author.name} updated the data of {header[0]}:**{key}** to{dict} in worksheet:**{commandSheet.title}**.')
 
     @commands.command(name='rename')
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -178,14 +187,16 @@ class Crud(commands.Cog, name="Crud"):
         keys = commandSheet.col_values(1)
         output = 0
         if key in keys:
-            # We need to say +1 because googlesheets idexes start at 1, not 0
             output = keys.index(key)+1
         else:
-            await ctx.send(f"Thingy wasn't foundy")
+            await ctx.send(f"{commandSheet.cell(1,1).value}: **{key}** doesn't exist.")
             return
 
-        # Update the cell of key with new key
-        commandSheet.update_cell(output, 1, new_key)
+        # Rename the cell of key with new key
+        try:
+            commandSheet.update_cell(output, 1, new_key)
+        except:
+            await ctx.send(f"Some error occured when updating the row.")
 
         # Sort table alphabetically by key
         try:
@@ -195,7 +206,7 @@ class Crud(commands.Cog, name="Crud"):
 
         # Make a nice completion message
         header = commandSheet.cell(1, 1).value
-        await ctx.send(f'**{ctx.message.author.name}** renamed {header} "{key}" to "{new_key}".')
+        await ctx.send(f'{ctx.message.author.name} renamed {header}:**{key}** to **{new_key}** in worksheet:**{commandSheet.title}**.')
 
     @commands.command(name='delete')
     @commands.cooldown(1, 5, commands.BucketType.user)
@@ -216,7 +227,7 @@ class Crud(commands.Cog, name="Crud"):
             # We need to say +1 because googlesheets idexes start at 1, not 0
             output = keys.index(key)+1
         else:
-            await ctx.send(f"Thingy wasn't foundy")
+            await ctx.send(f"{commandSheet.cell(1,1).value}: **{key}** doesn't exist.")
             return
 
         # Delete the row
@@ -233,7 +244,7 @@ class Crud(commands.Cog, name="Crud"):
 
         # Make a nice completion message
         header = commandSheet.cell(1, 1).value
-        await ctx.send(f'**{ctx.message.author.name}** deleted {header} "{key}".')
+        await ctx.send(f'{ctx.message.author.name} deleted {header}:**{key}** in worksheet:**{commandSheet.title}**.')
 
 
 def setup(bot: commands.bot):
